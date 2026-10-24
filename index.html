@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>海错粒子生命</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none;
+    font-family:-apple-system,"PingFang SC",sans-serif;color:#cfd6e0}
+  canvas{display:block;width:100vw;height:100vh}
+  #ui{position:fixed;left:28px;bottom:24px;pointer-events:none;transition:opacity .8s}
+  #name{font-size:22px;letter-spacing:.25em;font-weight:300;color:#fff}
+  #sub{font-size:12px;letter-spacing:.4em;color:#d9a85c;margin-top:6px}
+  #state{font-size:11px;letter-spacing:.3em;color:#6f7884;margin-top:10px;min-height:14px}
+  #help{font-size:12px;line-height:1.9;color:#7d8794;margin-top:16px}
+  #help b{color:#b9c2cc;font-weight:400}
+  #cam{position:fixed;right:20px;bottom:20px;width:160px;opacity:.5;transform:scaleX(-1);border:1px solid #333;display:none}
+  #shot{position:fixed;right:22px;bottom:22px;width:46px;height:46px;border-radius:50%;cursor:pointer;
+    background:rgba(12,14,18,.55);border:1px solid rgba(220,210,190,.35);color:#e8dcc4;display:grid;place-items:center;
+    transition:opacity .4s,border-color .2s;opacity:.55}
+  #shot:hover,#shot:focus-visible{opacity:1;border-color:#d9a85c;outline:none}
+  #shot svg{width:20px;height:20px}
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .5s ease-out}
+  #flash.on{opacity:.85;transition:none}
+  #photo{position:fixed;right:22px;bottom:84px;width:min(360px,calc(100vw - 44px));background:rgba(10,12,16,.92);
+    border:1px solid #2a2f37;border-radius:8px;padding:10px;cursor:auto;display:none;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  #photo.on{display:block}
+  #photo img{display:block;width:100%;border-radius:4px}
+  #photo .row{display:flex;gap:8px;margin-top:10px}
+  #photo a,#photo button{flex:1;text-align:center;font:12px -apple-system,"PingFang SC",sans-serif;letter-spacing:.15em;
+    padding:8px 0;border-radius:5px;border:1px solid #2c333d;background:#1a1f27;color:#e6ebf0;text-decoration:none;cursor:pointer}
+  #photo a{background:#d9a85c;border-color:#d9a85c;color:#16120c}
+  body.hide #shot{opacity:0}
+  #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;color:#aaa;font-size:14px}
+  body.hide #ui,body.hide #cam{opacity:0}
+  .hcur{position:fixed;left:0;top:0;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;pointer-events:none;
+    border:1px solid rgba(235,225,205,.55);box-shadow:0 0 18px rgba(235,215,180,.35),inset 0 0 12px rgba(235,215,180,.25);
+    opacity:0;transition:opacity .25s,transform .25s;transform:scale(.4)}
+  .hcur.open{opacity:.85;transform:scale(1)}
+  .hcur.fist{opacity:.35;transform:scale(.35)}
+  body.room{cursor:default}
+  #panel{position:fixed;top:16px;right:16px;width:250px;padding:14px 16px 12px;background:rgba(10,12,16,.78);
+    border:1px solid #232830;border-radius:8px;font-size:12px;color:#aab3be;cursor:auto;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:opacity .3s}
+  #panel.off{opacity:0;pointer-events:none}
+  #panel .hd{display:flex;justify-content:space-between;color:#e6ebf0;letter-spacing:.2em;margin-bottom:10px}
+  #panel .hd span{color:#66707c;letter-spacing:0}
+  #panel label{display:grid;grid-template-columns:76px 1fr 34px;align-items:center;gap:8px;margin:7px 0}
+  #panel input[type=range]{width:100%;accent-color:#d9a85c}
+  #panel output{text-align:right;color:#d9a85c;font-variant-numeric:tabular-nums}
+  #panel .sep{border-top:1px solid #232830;margin:10px 0 4px;padding-top:8px;color:#7d8794;letter-spacing:.2em}
+  #panel .row{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+  #panel button{flex:1;background:#1a1f27;color:#cfd6e0;border:1px solid #2c333d;border-radius:5px;padding:6px 4px;font:inherit;cursor:pointer}
+  #panel button:hover{border-color:#d9a85c;color:#fff}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<video id="cam" playsinline muted></video>
+<div class="hcur"></div><div class="hcur"></div><div class="hcur"></div>
+<div id="ui">
+  <div id="name">章鱼</div>
+  <div id="sub">涡流触手</div>
+  <div id="state"></div>
+  <div id="help">
+    <b>移动鼠标</b> 像观众的手 · 停留越久，溶解越深<br>
+    <b>离开</b> 两秒后，粒子凝聚成下一种生命<br>
+    <b>1 / 2 / 3</b> 章鱼 · 水母 · 鳐 · <b>E</b> 进化开关（关＝凝聚回原形）<br>
+    <b>R</b> 展厅模拟 · <b>A</b> 自动触碰 · <b>C</b> 手势（张开手掌触碰，握拳离开） · <b>M</b> 声音 · <b>S</b> 拍照 · <b>V</b> 换环境视频 · <b>P</b> 调节面板 · <b>H</b> 隐藏界面 · <b>F</b> 全屏
+  </div>
+</div>
+<div id="panel" class="off">
+  <div class="hd">调节<span>P 键开关</span></div>
+  <label>音量<input type="range" id="s_vol" min="0" max="1.5" step="0.01"><output></output></label>
+  <label>展厅亮度<input type="range" id="s_room" min="0" max="3" step="0.01"><output></output></label>
+  <label>整体曝光<input type="range" id="s_exp" min="0.3" max="3" step="0.01"><output></output></label>
+  <label>生物亮度<input type="range" id="s_body" min="0" max="3" step="0.01"><output></output></label>
+  <label>散开粒子<input type="range" id="s_dust" min="0" max="3" step="0.01"><output></output></label>
+  <label>粒子大小<input type="range" id="s_size" min="0.5" max="2.5" step="0.01"><output></output></label>
+  <label>泛光<input type="range" id="s_bloom" min="0" max="2.5" step="0.01"><output></output></label>
+  <div class="sep">自然环境</div>
+  <label>环境视频<select id="vidSel" style="grid-column:2/4;background:#1a1f27;color:#cfd6e0;border:1px solid #2c333d;border-radius:5px;padding:4px;font:inherit">
+    <option value="waterfall-bw">黑白瀑布</option><option value="kelp-rays">海藻林光柱</option>
+    <option value="waterfall-rock">岩壁瀑布</option><option value="sea-surface">暗色海面</option></select></label>
+  <label>环境亮度<input type="range" id="s_env" min="0" max="3" step="0.01"><output></output></label>
+  <label>环境对比<input type="range" id="s_envc" min="0.3" max="3" step="0.01"><output></output></label>
+  <label>环境色彩<input type="range" id="s_envcol" min="0" max="1" step="0.01"><output></output></label>
+  <div class="sep">层次</div>
+  <label>实体核心<input type="range" id="s_core" min="0" max="3" step="0.01"><output></output></label>
+  <label>古画线描<input type="range" id="s_line" min="0" max="3" step="0.01"><output></output></label>
+  <label>古籍文字<input type="range" id="s_page" min="0" max="3" step="0.01"><output></output></label>
+  <label>底层流动<input type="range" id="s_bgflow" min="0" max="3" step="0.01"><output></output></label>
+  <div class="row"><button id="bgPick">文字层换成自己的图…</button><button id="bgGen">恢复古籍页面</button></div>
+  <div class="row"><button id="reset">恢复默认</button></div>
+  <input type="file" id="bgFile" accept="image/*" hidden>
+</div>
+<button id="shot" title="拍照（S）" aria-label="拍照"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 8h3l1.6-2.2h6.8L17 8h3v11H4z"/><circle cx="12" cy="13.2" r="3.6"/></svg></button>
+<div id="flash"></div>
+<div id="photo"><img id="photoImg" alt="拍下的画面"><div class="row"><a id="photoSave" download>保存图片</a><button id="photoClose">关闭</button></div></div>
+<div id="err">这台电脑的浏览器不支持浮点渲染（需要 WebGL2 + EXT_color_buffer_float）</div>
+<script src="refs.js"></script>
+<script>
+'use strict';
+const cv=document.getElementById('c');
+const gl=cv.getContext('webgl2',{antialias:false,alpha:false,premultipliedAlpha:false});
+if(!gl||!gl.getExtension('EXT_color_buffer_float')){document.getElementById('err').style.display='flex';throw 'no float';}
+const qs=new URLSearchParams(location.search);
+const MOBILE=/Mobi|Android/i.test(navigator.userAgent);
+const SIDE=+qs.get('n')||(MOBILE?512:1024), N=SIDE*SIDE;
+const IMG_W=1024, IMG_H=576, IMG_AR=IMG_W/IMG_H;
+const CAM=3.2;
+
+const CREATURES=[
+  {key:'octopus',name:'章鱼',sub:'涡流触手'},
+  {key:'jelly',name:'水母',sub:'环状脉冲'},
+  {key:'ray',name:'鳐',sub:'张膜波浪'},
+];
+
+// ---------- GL 工具 ----------
+function sh(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(s));throw gl.getShaderInfoLog(s);}return s;}
+function program(vs,fs){const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,vs));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw gl.getProgramInfoLog(p);
+  const u={};const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
+  for(let i=0;i<n;i++){const a=gl.getActiveUniform(p,i);u[a.name]=gl.getUniformLocation(p,a.name);}
+  return {p,u};}
+function tex(w,h,ifmt,fmt,type,data,filter){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,ifmt,w,h,0,fmt,type,data||null);
+  const f=filter||gl.NEAREST;gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,f);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,f);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t;}
+const f32=(w,h,d)=>tex(w,h,gl.RGBA32F,gl.RGBA,gl.FLOAT,d);
+const f16=(w,h)=>tex(w,h,gl.RGBA16F,gl.RGBA,gl.HALF_FLOAT,null,gl.LINEAR);
+function fbo(...texs){const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  texs.forEach((t,i)=>gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0+i,gl.TEXTURE_2D,t,0));
+  gl.drawBuffers(texs.map((_,i)=>gl.COLOR_ATTACHMENT0+i));return f;}
+function bindTex(prog,name,unit,t){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);gl.uniform1i(prog.u[name],unit);}
+const emptyVao=gl.createVertexArray();
+const QUAD_VS=`#version 300 es
+out vec2 vUv;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));vUv=p;gl_Position=vec4(p*2.0-1.0,0.0,1.0);}`;
+
+// ---------- 从概念图按亮度采样粒子的"家" ----------
+const rnd=Math.random;
+function gauss(){let u=1-rnd(),v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*v);}
+function loadImg(src){return new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.src=src;});}
+// 按亮度分布撒点：亮处密、暗处稀。each(i,u,v,l,R,G,B) 写入第 i 个粒子
+function sampleCanvas(c,gamma,each){
+  const w=c.width,h=c.height,d=c.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
+  const P=w*h,cdf=new Float64Array(P),L=new Float32Array(P);
+  let acc=0;
+  for(let i=0;i<P;i++){
+    const l=(d[i*4]*0.3+d[i*4+1]*0.55+d[i*4+2]*0.15)/255;L[i]=l;
+    acc+=Math.pow(Math.max(0,l-0.035),gamma);cdf[i]=acc;
+  }
+  for(let i=0;i<N;i++){
+    const r=rnd()*acc;let lo=0,hi=P-1;
+    while(lo<hi){const m=(lo+hi)>>1;if(cdf[m]<r)lo=m+1;else hi=m;}
+    each(i,(lo%w+rnd())/w,(((lo/w)|0)+rnd())/h,L[lo],d[lo*4],d[lo*4+1],d[lo*4+2]);
+  }
+}
+function imageCanvas(im,w,h){   // 等比铺满（cover）
+  const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});
+  const k=Math.max(w/im.width,h/im.height);x.drawImage(im,(w-im.width*k)/2,(h-im.height*k)/2,im.width*k,im.height*k);return c;
+}
+async function buildHome(src){
+  const c=imageCanvas(await loadImg(src),IMG_W,IMG_H);
+  // 低频起伏做假纵深，转动时有视差
+  const nz=(u,v)=>Math.sin(u*5.1+1.3)*Math.cos(v*4.3-0.7)*0.5+Math.sin(u*11.7-v*9.1)*0.25;
+  const home=new Float32Array(N*4),col=new Uint8Array(N*4);
+  sampleCanvas(c,1.25,(i,u,v,l,R,G,B)=>{
+    home[i*4]=(u-0.5)*IMG_AR*2;home[i*4+1]=(0.5-v)*2;
+    home[i*4+2]=(l-0.35)*0.2+nz(u,v)*0.16+gauss()*0.012;
+    home[i*4+3]=l;
+    col[i*4]=R;col[i*4+1]=G;col[i*4+2]=B;
+    col[i*4+3]=Math.min(255,Math.max(0,(R-B)*2.2));   // 暖金程度
+  });
+  return {home:f32(SIDE,SIDE,home),col:tex(SIDE,SIDE,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,col)};
+}
+
+// ---------- 《海错图》原画 → 两层粒子 ----------
+// 从米色纸上把墨迹和设色分离出来；line＝轮廓线（原画线描），ink＝墨迹本身（题字、礁石）
+function inkCanvas(im,mode){
+  const w=IMG_W,h=IMG_H,k=Math.min(w/im.width,h/im.height)*0.94;
+  const iw=Math.round(im.width*k),ih=Math.round(im.height*k);
+  const src=document.createElement('canvas');src.width=iw;src.height=ih;
+  const sx=src.getContext('2d',{willReadFrequently:true});sx.drawImage(im,0,0,iw,ih);
+  const d=sx.getImageData(0,0,iw,ih).data,P=iw*ih,lum=new Float32Array(P);
+  for(let i=0;i<P;i++)lum[i]=d[i*4]*0.3+d[i*4+1]*0.55+d[i*4+2]*0.15;
+  const th=Float32Array.from(lum).sort()[(P*0.7)|0];
+  let pr=0,pg=0,pb=0,n=0;                       // 纸色＝最亮三成像素的平均
+  for(let i=0;i<P;i++)if(lum[i]>=th){pr+=d[i*4];pg+=d[i*4+1];pb+=d[i*4+2];n++;}
+  pr/=n;pg/=n;pb/=n;
+  let ink=new Float32Array(P);
+  for(let i=0;i<P;i++){const a=(d[i*4]-pr)/255,b=(d[i*4+1]-pg)/255,c=(d[i*4+2]-pb)/255;ink[i]=Math.min(1,Math.max(0,Math.sqrt(a*a+b*b+c*c)*3.2-0.06));}
+  const bl=new Float32Array(P);
+  for(let y=1;y<ih-1;y++)for(let x=1;x<iw-1;x++){const i=y*iw+x;bl[i]=(ink[i]*4+ink[i-1]+ink[i+1]+ink[i-iw]+ink[i+iw])/8;}
+  ink=bl;
+  const out=document.createElement('canvas');out.width=w;out.height=h;
+  const ox=out.getContext('2d',{willReadFrequently:true}),img=ox.createImageData(w,h);
+  const offX=(w-iw)>>1,offY=(h-ih)>>1;
+  for(let y=1;y<ih-1;y++)for(let x=1;x<iw-1;x++){
+    const i=y*iw+x;let v;
+    const gx=ink[i+1-iw]+2*ink[i+1]+ink[i+1+iw]-ink[i-1-iw]-2*ink[i-1]-ink[i-1+iw];
+    const gy=ink[i-1+iw]+2*ink[i+iw]+ink[i+1+iw]-ink[i-1-iw]-2*ink[i-iw]-ink[i+1-iw];
+    const edge=Math.min(1,Math.hypot(gx,gy)*1.4);
+    v=mode==='line'?edge+ink[i]*0.06:edge*0.7+Math.pow(ink[i],2.0)*0.35;   // 题字笔画细，靠墨迹；礁石大块，只留轮廓
+    const g=Math.min(255,v*255),o=((y+offY)*w+x+offX)*4;
+    img.data[o]=img.data[o+1]=img.data[o+2]=g;img.data[o+3]=255;
+  }
+  ox.putImageData(img,0,0);return out;
+}
+function layerTex(c,gamma,map){const a=new Float32Array(N*4);sampleCanvas(c,gamma,(i,u,v,l)=>map(a,i,u,v,l));return f32(SIDE,SIDE,a);}
+// 中层：原画线描，比生物略大、稍错开，像祖先的残影
+const lineMap=(a,i,u,v,l)=>{a[i*4]=(u-0.5)*IMG_AR*2.3+0.14;a[i*4+1]=(0.5-v)*2.3+0.05;a[i*4+2]=-0.35+0.06*Math.sin(u*6.0+v*3.0)+0.004*gauss();a[i*4+3]=l;};
+// 远层：原书整页（竖排题字、礁石），铺满身后；w 加 2 作为"文字层"的记号
+const pageMap=(a,i,u,v,l)=>{a[i*4]=(u-0.5)*5.7;a[i*4+1]=(0.5-v)*3.2;a[i*4+2]=-1.1+0.08*Math.sin(u*3.0)+0.004*gauss();a[i*4+3]=l+2;};
+let pageCustom=null;
+
+// ---------- 粒子状态 ----------
+const seed=new Float32Array(N*4),pos0=new Float32Array(N*4);
+for(let i=0;i<N;i++){
+  seed[i*4]=rnd();seed[i*4+1]=rnd();seed[i*4+2]=rnd();seed[i*4+3]=rnd();
+  pos0[i*4]=(rnd()-0.5)*5;pos0[i*4+1]=(rnd()-0.5)*2.6;pos0[i*4+2]=(rnd()-0.5)*1.6;pos0[i*4+3]=1;
+}
+const seedTex=f32(SIDE,SIDE,seed);
+const posT=[f32(SIDE,SIDE,pos0),f32(SIDE,SIDE,null)],velT=[f32(SIDE,SIDE,new Float32Array(N*4)),f32(SIDE,SIDE,null)];
+const simF=[fbo(posT[0],velT[0]),fbo(posT[1],velT[1])];
+let ping=0;
+
+// 溶解场（屏幕空间，低分辨率）
+const FW=160,FH=90;
+const fieldT=[f16(FW,FH),f16(FW,FH)],fieldF=[fbo(fieldT[0]),fbo(fieldT[1])];let fping=0;
+// 摄像头运动
+const GW=64,GH=36;const camTex=tex(GW,GH,gl.R8,gl.RED,gl.UNSIGNED_BYTE,new Uint8Array(GW*GH),gl.LINEAR);
+
+// ---------- 着色器 ----------
+const NOISE=`
+float hash(vec3 p){p=fract(p*0.3183099+0.1);p*=17.0;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+float vnoise(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.0-2.0*f);
+  return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
+vec3 pot(vec3 p){return vec3(vnoise(p),vnoise(p+vec3(31.4,7.1,-3.3)),vnoise(p+vec3(-9.2,17.7,23.1)))
+  +0.5*vec3(vnoise(p*2.3+5.0),vnoise(p*2.3+vec3(12.0,-4.0,8.0)),vnoise(p*2.3+vec3(-21.0,3.0,1.0)));}
+vec3 curl(vec3 p){const float e=0.08;
+  vec3 dx=vec3(e,0,0),dy=vec3(0,e,0),dz=vec3(0,0,e);
+  vec3 px0=pot(p-dx),px1=pot(p+dx),py0=pot(p-dy),py1=pot(p+dy),pz0=pot(p-dz),pz1=pot(p+dz);
+  return vec3((py1.z-py0.z)-(pz1.y-pz0.y),(pz1.x-pz0.x)-(px1.z-px0.z),(px1.y-px0.y)-(py1.x-py0.x))/(2.0*e);}
+`;
+const COMMON=`
+uniform vec2 uScale;uniform float uYaw;
+const float CAM=${CAM.toFixed(2)};
+vec3 view(vec3 p){float c=cos(uYaw),s=sin(uYaw);return vec3(p.x*c+p.z*s,p.y,-p.x*s+p.z*c);}
+vec2 proj(vec3 p,out float w){w=CAM/(CAM-p.z);return p.xy*w*uScale;}
+`;
+
+const DEFORM=`
+// 让概念图里的身体动起来
+vec3 deform(vec3 h,vec4 S){
+  vec3 p=h;float t=uT;
+  if(uCreature<0.5){            // 章鱼：以身体中心为轴，触手沿不同涡流舒卷
+    vec2 c=vec2(0.0,0.2);vec2 r=p.xy-c;float d=length(r),a=atan(r.y,r.x);
+    float m=smoothstep(0.12,0.9,d);
+    a+=0.16*m*sin(t*0.42+d*3.6+a*1.3)+0.05*m*sin(t*0.9-d*7.0);
+    d*=1.0+0.035*sin(t*0.65-d*4.0);
+    p.xy=c+d*vec2(cos(a),sin(a));p.z+=0.12*m*sin(t*0.5+a*2.0+d*3.0);
+  }else if(uCreature<1.5){      // 水母：收缩波从伞顶传到伞缘，触手随后摆动
+    float cx=-0.05,top=0.95,rim=0.05;
+    float bell=smoothstep(rim-0.15,rim+0.1,p.y);
+    float ph=t*1.35-(top-p.y)*2.4;float pulse=max(0.0,sin(ph));
+    p.x=cx+(p.x-cx)*(1.0-0.07*pulse*bell);p.y+=0.035*pulse*bell;
+    float below=1.0-bell;float k=max(0.0,rim-p.y);
+    p.x+=below*k*0.09*sin(t*1.2-p.y*5.0+S.x*0.6);p.z+=below*k*0.08*cos(t*0.9-p.y*4.0);
+    p.y+=below*0.03*sin(t*1.35-k*3.0);
+  }else{                        // 鳐：大波从身体中央向两侧翼尖传播
+    float cx=-0.15;float dx=p.x-cx,ax=abs(dx);
+    float fl=0.17*sin(t*1.0-ax*2.1)*pow(ax,1.35);
+    p.y+=fl;p.z+=fl*0.6;p.x-=0.03*pow(ax,1.5)*cos(t*1.0-ax*2.1)*sign(dx);
+  }
+  p.y+=0.025*sin(t*0.37);p.x+=0.02*sin(t*0.23);
+  return view(p);
+}
+`;
+
+const simP=program(QUAD_VS,`#version 300 es
+precision highp float;
+uniform sampler2D uPos,uVel,uSeed,uHome,uField,uCam,uLineHome,uPageHome;
+uniform float uT,uMorph,uCamOn,uCreature,uAspect,uBgFlow,uEnvC;uniform sampler2D uVideo;
+uniform vec2 uHands[3],uHandVels[3];uniform float uHandOns[3];
+layout(location=0) out vec4 oPos;layout(location=1) out vec4 oVel;
+${NOISE}${COMMON}${DEFORM}
+void main(){
+  ivec2 ij=ivec2(gl_FragCoord.xy);
+  vec4 P=texelFetch(uPos,ij,0),V=texelFetch(uVel,ij,0),S=texelFetch(uSeed,ij,0),H=texelFetch(uHome,ij,0);
+  vec3 p=P.xyz,v=V.xyz;float D=P.w;
+  bool amb=S.w<0.012,env=!amb&&S.w<0.40,bg=!amb&&!env&&S.w<0.44;
+  float w;vec2 ndc=proj(p,w);
+  const mat3 R3=mat3(0.8,0.36,-0.48,-0.6,0.48,-0.64,0.0,0.8,0.6);
+  vec3 fl=curl(R3*p*1.6+vec3(0.0,-uT*0.04,uT*0.06));
+  // 观众的手
+  vec3 hand=vec3(0.0);vec2 handUv=vec2(0.0);   // 最多 3 位观众的手
+  for(int k=0;k<3;k++){
+    vec2 dd=(ndc-uHands[k])*vec2(uAspect,1.0);float dist=length(dd);
+    float fall=uHandOns[k]*pow(max(0.0,1.0-dist/0.22),2.0);
+    vec2 dn=dd/(dist+1e-4);
+    hand+=vec3(uHandVels[k]/uScale/w,0.0)*fall*0.12+vec3(dn*0.0006+vec2(-dn.y,dn.x)*0.0014,0.0)*fall;
+    handUv+=vec2(uHandVels[k].x,-uHandVels[k].y)*fall*0.9/(w*uScale*vec2(5.7,3.2))*0.5+vec2(dn.x,-dn.y)*fall*0.002;
+  }
+  float cm=uCamOn*texture(uCam,ndc*0.5+0.5).r;
+
+  if(amb){                       // 远景尘雾：一直漂着
+    v=v*0.95+fl*0.00006+vec3(0.00002,0.00004,0.0)+hand*0.6+vec3((S.xy-0.5)*0.004,0.0)*cm;
+    p+=v;
+    if(p.x>2.8)p.x-=5.6;if(p.x<-2.8)p.x+=5.6;if(p.y>1.5)p.y-=3.0;if(p.y<-1.5)p.y+=3.0;
+    if(p.z>1.6)p.z-=3.2;if(p.z<-1.6)p.z+=3.2;
+    oPos=vec4(p,1.0);oVel=vec4(v,0.0);return;
+  }
+  if(env){                       // 自然环境：粒子住在视频亮的地方，暗处的粒子不断迁走
+    vec2 uv=V.xy;float life=V.z;
+    const vec2 E=vec2(1.0/240.0,0.0);
+    #define LUM(q) pow(clamp(dot(texture(uVideo,q).rgb,vec3(0.3,0.55,0.15)),0.0,1.0),uEnvC*0.9)
+    float L=LUM(uv);
+    vec2 g=vec2(LUM(uv+E.xy)-LUM(uv-E.xy),LUM(uv+E.yx)-LUM(uv-E.yx));
+    uv+=g*0.0003+vec2(fl.x,-fl.y)*0.00004*uBgFlow;
+    uv+=handUv;
+    uv+=vec2(S.x-0.5,S.y-0.5)*cm*0.004;
+    float r=hash(vec3(S.x*91.7+uT*13.1,S.z*37.0,S.y*11.0+uT));
+    if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0||(V.x==0.0&&V.y==0.0)||r<(1.0-L)*(1.0-L)*0.02){
+      uv=vec2(hash(vec3(S.x*57.3,uT*7.7,S.w*91.0)),hash(vec3(S.y*23.1,uT*3.3+1.7,S.z*45.0)));life=0.0;
+    }
+    life=min(1.0,life+0.04);
+    vec3 q=vec3((uv.x-0.5)*5.7,(0.5-uv.y)*3.2,-0.95+0.3*L+0.03*(S.z-0.5));
+    q.x+=0.02*sin(uT*0.2*uBgFlow+uv.y*5.0);
+    oPos=vec4(view(q),4.0+min(L,0.999)*life);oVel=vec4(uv,life,0.0);return;
+  }
+  if(bg){                        // 古画两层：在身后缓慢起伏，手划过会被搅动，然后慢慢回位
+    bool line=S.w<0.425;
+    vec4 B=line?texelFetch(uLineHome,ij,0):texelFetch(uPageHome,ij,0);vec3 T=B.xyz;float t=uT*uBgFlow;
+    T.x+=0.06*sin(t*0.13+B.y*2.7)+0.025*sin(t*0.31+B.y*7.0+B.x);
+    T.y+=0.05*sin(t*0.11+B.x*1.9)+0.02*sin(t*0.27+B.x*5.0)+0.012*sin(t*0.9+S.x*6.28);
+    T+=fl*0.01*uBgFlow;
+    if(line)T+=fl*0.35*uMorph;        // 进化时祖先线描也一起散开、重画
+    T=view(T);
+    v=v*0.9+hand*1.4+vec3((S.xy-0.5)*0.006,0.0)*cm+vec3(0.0,0.002,0.0)*cm;
+    p+=v;p=mix(p,T,0.02);
+    oPos=vec4(p,B.w);oVel=vec4(v,0.0);return;
+  }
+  vec3 T=deform(H.xyz,S);
+  float wt;vec2 ndcT=proj(T,wt);
+  float f=texture(uField,ndcT*0.5+0.5).r;
+  float thr=0.08+0.62*S.x;
+  float Dt=smoothstep(thr,thr+0.22,f);
+  Dt=max(Dt,smoothstep(S.y*0.8,S.y*0.8+0.2,uMorph));
+  float nD=D+(Dt-D)*(Dt>D?0.09:0.005+0.012*S.z);
+  float dD=max(0.0,nD-D);D=nD;
+  // 溶解的一瞬间被向外、向上吹开
+  vec3 kick=normalize(vec3(S.z-0.5,S.w*0.4+S.y-0.4,S.x-0.5)+fl*0.3);
+  v+=kick*dD*0.012;
+  v=v*mix(0.80,0.95,D)+fl*0.00012*D+vec3(0.00004,0.00012,0.0)*D;
+  v+=hand*(0.25+D)+vec3((S.zw-0.5)*0.008,0.0)*cm*D+vec3(0.0,0.003,0.0)*cm*D;
+  p+=v;
+  float pull=0.22*pow(1.0-D,2.2);
+  p=mix(p,T,pull);
+  // 完整时也有极细的呼吸抖动
+  p+=(1.0-D)*0.0015*vec3(sin(uT*1.7+S.x*40.0),cos(uT*1.3+S.y*40.0),0.0);
+  oPos=vec4(p,D);oVel=vec4(v,f);
+}`);
+
+const fieldP=program(QUAD_VS,`#version 300 es
+precision highp float;in vec2 vUv;out vec4 o;
+uniform sampler2D uPrev,uCam;uniform vec2 uHands[3],uTexel;uniform float uHandAmts[3],uPresence,uCamOn,uAspect,uT;
+${NOISE}
+void main(){
+  float c=texture(uPrev,vUv).r;
+  float m=0.0;
+  for(int i=0;i<8;i++){float a=float(i)*0.7854;m=max(m,texture(uPrev,vUv+vec2(cos(a),sin(a))*uTexel*0.6).r);}
+  // 侵蚀前沿不规则，像纸被烧开
+  float g=0.972+0.026*vnoise(vec3(vUv*vec2(9.0,5.0),uT*0.15));
+  float f=uPresence>0.5?max(c,m*g):c*0.993;
+  if(uPresence>0.5&&c>0.3)f+=0.0025;
+  for(int k=0;k<3;k++){vec2 hd=(vUv*2.0-1.0-uHands[k])*vec2(uAspect,1.0);f+=uHandAmts[k]*exp(-dot(hd,hd)/0.012)*0.22;}
+  f+=uCamOn*texture(uCam,vUv).r*0.12;
+  o=vec4(clamp(f,0.0,1.3),0,0,1);
+}`);
+
+const drawP=program(`#version 300 es
+precision highp float;
+uniform sampler2D uPos,uSeed,uCol,uVel,uVideo;uniform int uSide;uniform float uDpr,uSize,uEnergy,uBody,uDust,uLine,uPage,uEnv,uEnvCol;
+out vec3 vCol;out float vSoft;
+${COMMON}
+void main(){
+  ivec2 ij=ivec2(gl_VertexID%uSide,gl_VertexID/uSide);
+  vec4 P=texelFetch(uPos,ij,0),S=texelFetch(uSeed,ij,0);
+  float w;vec2 ndc=proj(P.xyz,w);
+  gl_Position=vec4(ndc,0.0,1.0);
+  float coc=abs(P.z)*0.7;
+  if(S.w<0.012){
+    bool bokeh=S.w<0.0006;
+    gl_PointSize=(bokeh?(14.0+40.0*S.x)*w:uSize*0.9*w+coc)*uDpr;
+    vCol=vec3(0.62,0.7,0.95)*(bokeh?0.012:0.12)*uEnergy*uEnv/(1.0+coc*coc*0.5);
+    vSoft=bokeh?1.0:0.0;return;
+  }
+  if(S.w<0.40){
+    float l=P.w-4.0;vec2 uv=texelFetch(uVel,ij,0).xy;
+    vec3 vc=texture(uVideo,uv).rgb;float vl=max(0.05,dot(vc,vec3(0.3,0.55,0.15)));
+    vec3 c=mix(mix(vec3(0.8,0.86,1.0),vec3(0.96,0.95,0.92),S.y),vc/vl*0.85,uEnvCol);
+    gl_PointSize=(uSize*w*(0.9+0.7*S.z)+coc)*uDpr;
+    vCol=c*(0.2+l*l*3.0)*2.2*uEnergy*uEnv/(1.0+coc*coc*1.2);vSoft=0.0;return;
+  }
+  if(S.w<0.44){
+    bool page=P.w>1.5;float l=page?P.w-2.0:P.w;
+    gl_PointSize=(uSize*w*(0.75+0.5*S.z)+coc)*uDpr;
+    vec3 c=page?mix(vec3(0.95,0.74,0.45),vec3(0.8,0.78,0.85),S.y*0.6)      // 题字：暗金
+               :mix(vec3(0.82,0.88,1.0),vec3(1.0,0.94,0.84),S.y);          // 线描：冷白
+    vCol=c*(0.35+1.2*l)*(page?1.4:1.0)*uEnergy*(page?uPage:uLine)/(1.0+coc*coc*1.2);vSoft=0.0;return;
+  }
+  vec4 C=texelFetch(uCol,ij,0);float D=P.w;
+  float l=max(0.06,dot(C.rgb,vec3(0.3,0.55,0.15)));
+  vec3 hue=C.rgb/l;                       // 只取色相，亮度交给粒子密度
+  vec3 body=mix(vec3(0.92,0.95,1.0),hue*vec3(1.0,0.86,0.66),smoothstep(0.1,0.5,C.a));
+  vec3 dust=mix(vec3(0.78,0.85,1.0),vec3(0.95,0.88,1.0),S.z);
+  vec3 col=mix(body,dust,smoothstep(0.1,0.9,D));
+  float b=(0.3+1.8*l*l+0.6*l)*(1.0+0.7*smoothstep(0.2,0.7,C.a));
+  b*=mix(uBody,(0.55+0.9*S.y*S.y)*uDust,smoothstep(0.0,0.8,D));   // 散开后亮暗更分化
+  gl_PointSize=(uSize*w*(0.7+0.5*S.z)+coc+D*0.5)*uDpr;
+  vCol=col*b*1.6*uEnergy/(1.0+coc*coc*1.2);vSoft=0.0;
+}`,`#version 300 es
+precision mediump float;in vec3 vCol;in float vSoft;out vec4 o;
+void main(){float d=length(gl_PointCoord-0.5)*2.0;
+  float k=vSoft>0.5?smoothstep(1.0,0.7,d)*(0.6+0.4*d):smoothstep(1.0,0.0,d);
+  o=vec4(vCol*k,1.0);}`);
+
+// 实体核心：概念图本身贴在一张网格上，跟粒子用同一套变形；被碰到、进化时淡出，交给粒子
+const coreP=program(`#version 300 es
+precision highp float;
+in vec2 aUv;uniform sampler2D uField;uniform float uT,uCreature,uMorph;uniform vec3 uCoreC;
+out vec2 vUv;out float vA;
+${NOISE}${COMMON}${DEFORM}
+void main(){
+  vec3 h=vec3((aUv.x-0.5)*${(IMG_W/IMG_H).toFixed(4)}*2.0,(0.5-aUv.y)*2.0,0.0);
+  float w;vec2 ndc=proj(deform(h,vec4(0.5)),w);gl_Position=vec4(ndc,0.0,1.0);
+  float f=texture(uField,ndc*0.5+0.5).r;
+  vA=smoothstep(uCoreC.z,uCoreC.z*0.2,length(h.xy-uCoreC.xy))*(1.0-smoothstep(0.04,0.4,f))*(1.0-smoothstep(0.0,0.45,uMorph));
+  vUv=aUv;
+}`,`#version 300 es
+precision highp float;in vec2 vUv;in float vA;out vec4 o;uniform sampler2D uImg;uniform float uGain;
+void main(){vec3 c=max(texture(uImg,vUv).rgb-0.03,0.0);o=vec4(c*c*vA*uGain*0.55,1.0);}`);
+const CORE_GX=192,CORE_GY=108;
+const coreVao=gl.createVertexArray();gl.bindVertexArray(coreVao);
+{const uv=new Float32Array((CORE_GX+1)*(CORE_GY+1)*2),idx=new Uint16Array(CORE_GX*CORE_GY*6);
+  for(let y=0;y<=CORE_GY;y++)for(let x=0;x<=CORE_GX;x++){const i=y*(CORE_GX+1)+x;uv[i*2]=x/CORE_GX;uv[i*2+1]=y/CORE_GY;}
+  let k=0;for(let y=0;y<CORE_GY;y++)for(let x=0;x<CORE_GX;x++){const a=y*(CORE_GX+1)+x,b=a+1,c=a+CORE_GX+1,d=c+1;idx.set([a,b,c,b,d,c],k);k+=6;}
+  const vb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,uv,gl.STATIC_DRAW);
+  const loc=gl.getAttribLocation(coreP.p,'aUv');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  const ib=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,idx,gl.STATIC_DRAW);}
+gl.bindVertexArray(null);
+const CORE_COUNT=CORE_GX*CORE_GY*6;
+// 每种生物"实"的中心和半径（世界坐标）
+const CORE_C=[[0.05,0.35,0.8],[-0.07,0.4,1.15],[-0.18,-0.08,1.05]];
+function imageTex(im){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,im);gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t;}
+
+const fadeP=program(QUAD_VS,`#version 300 es
+precision mediump float;uniform float uK;out vec4 o;void main(){o=vec4(0.0,0.0,0.0,uK);}`);
+const brightP=program(QUAD_VS,`#version 300 es
+precision mediump float;in vec2 vUv;out vec4 o;uniform sampler2D uSrc;uniform vec2 uTexel;
+void main(){vec3 c=vec3(0.0);
+  c+=texture(uSrc,vUv+uTexel*vec2(-1,-1)).rgb;c+=texture(uSrc,vUv+uTexel*vec2(1,-1)).rgb;
+  c+=texture(uSrc,vUv+uTexel*vec2(-1,1)).rgb;c+=texture(uSrc,vUv+uTexel*vec2(1,1)).rgb;c*=0.25;
+  o=vec4(max(c-0.45,0.0),1.0);}`);
+const blurP=program(QUAD_VS,`#version 300 es
+precision mediump float;in vec2 vUv;out vec4 o;uniform sampler2D uSrc;uniform vec2 uDir;
+void main(){vec3 c=texture(uSrc,vUv).rgb*0.227;
+  c+=(texture(uSrc,vUv+uDir*1.385).rgb+texture(uSrc,vUv-uDir*1.385).rgb)*0.316;
+  c+=(texture(uSrc,vUv+uDir*3.231).rgb+texture(uSrc,vUv-uDir*3.231).rgb)*0.070;
+  o=vec4(c,1.0);}`);
+const compP=program(QUAD_VS,`#version 300 es
+precision highp float;in vec2 vUv;out vec4 o;uniform sampler2D uHdr,uB1,uB2;uniform float uExp,uT,uBloom;
+void main(){
+  vec3 c=texture(uHdr,vUv).rgb+(texture(uB1,vUv).rgb*0.4+texture(uB2,vUv).rgb*0.5)*uBloom;
+  c=1.0-exp(-c*uExp);c=c*c*(3.0-2.0*c)*0.35+c*0.65;
+  vec2 q=vUv-0.5;c*=1.0-dot(q,q)*0.9;
+  c+=(fract(sin(dot(vUv*1000.0+uT,vec2(12.9898,78.233)))*43758.5453)-0.5)*0.012;
+  o=vec4(pow(max(c,0.0),vec3(0.92)),1.0);}`);
+
+// ---------- 展厅模拟：按参考照片的黑盒展厅，投影就是房间里唯一的光源 ----------
+// 单位：米。投影墙在 z=0，投影底边贴地；房间宽 8.9、高 4.75；镜头在房间中后部、齐眼高
+const ROOM={hw:4.45,h:4.75,proj:[-3.9,0.0,3.9,7.8*9/16],F:2.15,ro:[0.12,1.45,8.5],ta:[0.0,1.78,0.0]};
+const roomP=program(QUAD_VS,`#version 300 es
+precision highp float;out vec4 o;
+uniform sampler2D uWall;uniform vec2 uRes;uniform vec3 uRo,uTa;uniform float uT,uRoomExp;
+const float HW=${ROOM.hw.toFixed(3)},HH=${ROOM.h.toFixed(3)},PI=3.14159;
+const vec4 PROJ=vec4(${ROOM.proj.map(v=>v.toFixed(4)).join(',')});
+vec2 wuv(vec2 q){return (q-PROJ.xy)/(PROJ.zw-PROJ.xy);}
+float h21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+  return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);}
+// 投影画面当作一块面光源：分成 8×5 块，每块按它的平均亮度照亮这个点
+vec3 irr(vec3 p,vec3 n){
+  vec3 E=vec3(0.0);vec2 sz=PROJ.zw-PROJ.xy;float cell=sz.x*sz.y/40.0;
+  for(int j=0;j<5;j++)for(int i=0;i<8;i++){
+    vec2 uv=(vec2(i,j)+0.5)/vec2(8.0,5.0);
+    vec3 L=textureLod(uWall,uv,6.5).rgb;
+    vec3 v=vec3(PROJ.xy+uv*sz,0.0)-p;float d2=dot(v,v);vec3 l=v*inversesqrt(d2);
+    E+=L*max(dot(n,l),0.0)*max(-l.z,0.0)*cell/(PI*d2+0.02);
+  }
+  return E*16.0*uRoomExp;   // 相机曝光：照片是长曝光，墙和地被提亮
+}
+vec3 wallImg(vec2 q,float lod){vec2 uv=wuv(q);return textureLod(uWall,clamp(uv,0.001,0.999),lod).rgb;}
+float inProj(vec2 q){vec2 uv=wuv(q);return step(0.0,uv.x)*step(uv.x,1.0)*step(0.0,uv.y)*step(uv.y,1.0);}
+void main(){
+  vec2 sc=(gl_FragCoord.xy/uRes*2.0-1.0)*vec2(1.0,uRes.y/uRes.x)*1.6;   // 水平视角固定，窗口变窄就多看到上下
+  vec3 fw=normalize(uTa-uRo),rt=normalize(cross(fw,vec3(0,1,0))),up=cross(rt,fw);
+  vec3 d=normalize(fw*${ROOM.F.toFixed(2)}+rt*sc.x+up*sc.y),ro=uRo;
+  float t=1e9;int surf=0;
+  float tb=-ro.z/d.z;if(tb>0.0&&tb<t){t=tb;surf=1;}
+  if(d.y<0.0){float tf=-ro.y/d.y;if(tf<t){t=tf;surf=2;}}
+  if(d.y>0.0){float tc=(HH-ro.y)/d.y;if(tc<t){t=tc;surf=3;}}
+  float ts=(sign(d.x)*HW-ro.x)/d.x;if(ts>0.0&&ts<t){t=ts;surf=4;}
+  vec3 p=ro+d*t,col;
+  // 墙角、地脚的环境遮蔽
+  float ao=smoothstep(0.0,0.7,p.z)*0.45+0.55;
+  ao*=smoothstep(0.0,0.6,HW-abs(p.x))*0.35+0.65;
+  if(surf==1){                                     // 投影墙
+    float ip=inProj(p.xy);
+    vec2 uv=wuv(p.xy);float dd=length(max(max(-uv,uv-1.0),0.0)*(PROJ.zw-PROJ.xy));
+    vec3 spillEdge=textureLod(uWall,clamp(uv,0.0,1.0),5.0).rgb*0.18*exp(-dd*5.0);   // 投影机溢出画面边缘的一点光
+    col=mix(vec3(0.012)+spillEdge,wallImg(p.xy,0.0)*0.97,ip);
+  }else if(surf==2){                               // 灰色水泥地：漫反射 + 粗糙的模糊倒影
+    float alb=0.30*(0.9+0.2*vn(p.xz*3.0))*(0.96+0.08*vn(p.xz*23.0));
+    col=alb*irr(p,vec3(0,1,0))*ao;
+    vec3 r=vec3(d.x,-d.y,d.z);vec3 q=p+r*(-p.z/r.z);
+    if(q.y<HH){
+      float lod=2.5+p.z*0.45;vec3 rf=vec3(0.0);
+      for(int k=-2;k<=2;k++){vec2 qq=vec2(q.x,q.y*(1.0+float(k)*0.07));rf+=wallImg(qq,lod)*inProj(qq);}
+      float c=clamp(-d.y,0.0,1.0),F=0.03+0.97*pow(1.0-c,5.0);
+      col+=rf/5.0*F*0.9*(0.6+0.4*uRoomExp);
+    }
+  }else if(surf==3){                               // 黑色天花板：主梁沿 x、次梁沿 z
+    float beamX=1.0-smoothstep(0.32,0.38,abs(fract(p.z/2.4)-0.5));
+    float beamZ=1.0-smoothstep(0.04,0.1,abs(abs(p.x)-1.6));
+    float alb=mix(0.035,0.09,max(beamX,beamZ));
+    col=alb*irr(p,vec3(0,-1,0));
+  }else{                                           // 侧墙：白墙，左墙有一扇门
+    vec3 n=vec3(-sign(p.x),0.0,0.0);
+    float alb=0.62;
+    if(p.x<0.0){
+      float door=step(2.0,p.z)*step(p.z,3.15)*step(p.y,2.35);
+      float frame=door*(1.0-step(2.05,p.z)*step(p.z,3.1)*step(p.y,2.3));
+      alb=mix(alb,0.5,door)*(1.0-frame*0.5);
+    }
+    float skirt=step(p.y,0.08);alb*=1.0-skirt*0.3;
+    col=alb*irr(p,n)*ao;
+  }
+  // 镜头在亮处的光晕
+  vec3 qg=ro+d*(-ro.z/d.z);vec2 gu=wuv(qg.xy);
+  float gd=length(max(max(-gu,gu-1.0),0.0)*(PROJ.zw-PROJ.xy));
+  col+=textureLod(uWall,clamp(gu,0.0,1.0),6.0).rgb*0.07*exp(-gd*1.2);
+  // 照片质感：暗角、轻微偏暖、颗粒
+  col*=vec3(1.03,1.0,0.96)*(1.0-0.22*dot(sc*0.5,sc*0.5));
+  col+=(h21(gl_FragCoord.xy+fract(uT)*91.0)-0.5)*0.018;
+  o=vec4(pow(max(col,0.0),vec3(0.94)),1.0);
+}`);
+
+// ---------- 画面尺寸与渲染目标 ----------
+let W,H,RW,RH,DPR,hdrT,hdrF,b1,b2,b3,b4,bF={},room=false,wallT=null,wallF=null;
+function resize(){
+  DPR=Math.min(1.5,devicePixelRatio||1);
+  cv.width=Math.round(innerWidth*DPR);cv.height=Math.round(innerHeight*DPR);
+  if(room){W=RW=1280;H=RH=720;}else{W=innerWidth;H=innerHeight;RW=cv.width;RH=cv.height;}
+  [hdrT,b1,b2,b3,b4,wallT].forEach(t=>t&&gl.deleteTexture(t));
+  wallT=tex(RW,RH,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,null,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);wallF=fbo(wallT);
+  hdrT=f16(RW,RH);hdrF=fbo(hdrT);
+  const w4=RW>>2,h4=RH>>2,w8=RW>>3,h8=RH>>3;
+  b1=f16(w4,h4);b2=f16(w4,h4);b3=f16(w8,h8);b4=f16(w8,h8);
+  bF={b1:fbo(b1),b2:fbo(b2),b3:fbo(b3),b4:fbo(b4),w4,h4,w8,h8};
+  gl.bindFramebuffer(gl.FRAMEBUFFER,hdrF);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);
+}
+addEventListener('resize',resize);resize();
+function scale(){const s=Math.min(H/2,W/2/IMG_AR)*0.98;return [s/(W/2),s/(H/2)];}
+
+// ---------- 调节面板 ----------
+const DEFAULTS={vol:0.7,room:1,exp:1.25,body:1,dust:1,size:1,bloom:1,env:0.8,envc:1,envcol:0.3,core:1,line:0,page:0,bgflow:1,video:'waterfall-bw'};
+const set={...DEFAULTS};
+try{Object.assign(set,JSON.parse(localStorage.getItem('sea-creatures-settings-v2')||'{}'));}catch(e){}
+const panel=document.getElementById('panel'),vidSel=document.getElementById('vidSel');
+// 环境视频：粒子按视频亮度分布，跟着真实的水流和光线动（需要通过本地服务器打开，file:// 下浏览器不让读视频像素）
+const envVid=document.createElement('video');envVid.muted=true;envVid.loop=true;envVid.playsInline=true;envVid.crossOrigin='anonymous';
+const vidTex=tex(2,2,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(16),gl.LINEAR);let vidReady=false,vidBlocked=false;
+function setVideo(name){set.video=name;vidReady=false;envVid.src='videos/'+name+'.mp4';envVid.play().catch(()=>{});
+  try{localStorage.setItem('sea-creatures-settings-v2',JSON.stringify(set));}catch(e){}}
+function updateVideoTex(){
+  if(envVid.readyState<2||vidBlocked)return;
+  gl.bindTexture(gl.TEXTURE_2D,vidTex);
+  try{gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,envVid);vidReady=true;}
+  catch(e){vidBlocked=true;console.warn('读不到视频像素：请用本地服务器打开（双击 打开.command）',e);}
+}
+vidSel.onchange=()=>setVideo(vidSel.value);
+function syncPanel(){vidSel.value=set.video;for(const k in DEFAULTS){if(k==='video')continue;const el=document.getElementById('s_'+k);el.value=set[k];el.nextElementSibling.textContent=(+set[k]).toFixed(2);}}
+for(const k in DEFAULTS){if(k==='video')continue;document.getElementById('s_'+k).addEventListener('input',e=>{set[k]=+e.target.value;e.target.nextElementSibling.textContent=set[k].toFixed(2);
+  try{localStorage.setItem('sea-creatures-settings-v2',JSON.stringify(set));}catch(err){}});}
+document.getElementById('reset').onclick=()=>{Object.assign(set,DEFAULTS);syncPanel();setVideo(set.video);try{localStorage.removeItem('sea-creatures-settings-v2');}catch(e){}};
+document.getElementById('bgGen').onclick=()=>{pageCustom=null;};
+const bgFile=document.getElementById('bgFile');
+document.getElementById('bgPick').onclick=()=>bgFile.click();
+async function useBgImage(file){if(!file||!file.type.startsWith('image/'))return;
+  const url=URL.createObjectURL(file);pageCustom=layerTex(imageCanvas(await loadImg(url),512,288),2.0,pageMap);URL.revokeObjectURL(url);}
+bgFile.onchange=()=>useBgImage(bgFile.files[0]);
+addEventListener('dragover',e=>e.preventDefault());
+addEventListener('drop',e=>{e.preventDefault();useBgImage(e.dataTransfer.files[0]);});
+syncPanel();setVideo(set.video);
+
+// ---------- 交互状态 ----------
+const mouse={px:0,py:0,on:false,last:-1e9};
+addEventListener('pointermove',e=>{if(e.target.closest&&e.target.closest('#panel')){mouse.on=false;return;}mouse.px=e.clientX;mouse.py=e.clientY;mouse.on=true;mouse.last=performance.now();});
+addEventListener('pointerdown',()=>{mouse.last=performance.now();});
+addEventListener('pointerleave',()=>{mouse.on=false;});
+const hands=[0,1,2].map(()=>({x:0,y:0,lx:0,ly:0,vx:0,vy:0,on:false,last:-1e9}));
+
+// ---------- 展厅里的交互 ----------
+// 鼠标指向墙面哪里，哪里就是一只手；A 键打开"自动触碰"，模拟有人不时上前伸手（不显示人）
+const roomCam={ro:ROOM.ro.slice(),ta:ROOM.ta};
+let autoVisitors=false;
+const ghosts=[1,2].map(k=>({k,mode:'idle',timer:2+k*3,bx:0,by:2,seed:Math.random()*10}));
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],norm=a=>{const l=Math.hypot(...a);return a.map(x=>x/l);},
+  cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+function mouseRay(){   // 与展厅着色器同一套镜头
+  const ro=roomCam.ro,fw=norm(sub(roomCam.ta,ro)),rt=norm(cross(fw,[0,1,0])),up=cross(rt,fw);
+  const sx=(mouse.px/innerWidth*2-1)*1.6,sy=(1-mouse.py/innerHeight*2)*1.6*innerHeight/innerWidth;
+  const d=norm([0,1,2].map(i=>fw[i]*ROOM.F+rt[i]*sx+up[i]*sy));return {ro,d};
+}
+const P=ROOM.proj,wallToNdc=(x,y)=>[(x-P[0])/(P[2]-P[0])*2-1,(y-P[1])/(P[3]-P[1])*2-1];
+function updateVisitors(dt,now,t){
+  const h0=hands[0];h0.on=false;
+  if(mouse.on){
+    const {ro,d}=mouseRay();const tw=-ro[2]/d[2],wx=ro[0]+d[0]*tw,wy=ro[1]+d[1]*tw;
+    if(tw>0&&wx>P[0]&&wx<P[2]&&wy>P[1]&&wy<P[3]){[h0.x,h0.y]=wallToNdc(wx,wy);h0.on=true;h0.last=mouse.last;}
+  }
+  for(const g of ghosts){
+    const h=hands[g.k];h.on=false;if(!autoVisitors)continue;
+    g.timer-=dt;
+    if(g.mode==='idle'&&g.timer<0){g.mode='reach';g.timer=3+Math.random()*4;g.bx=(Math.random()*2-1)*2.8;g.by=1.0+Math.random()*1.4;}
+    else if(g.mode==='reach'){
+      const hx=g.bx+0.35*Math.sin(t*0.9+g.seed),hy=g.by+0.22*Math.cos(t*1.3+g.seed);
+      [h.x,h.y]=wallToNdc(hx,hy);h.on=true;h.last=now;
+      if(g.timer<0){g.mode='idle';g.timer=6+Math.random()*12;}
+    }
+  }
+}
+function setRoom(on){room=on;document.body.classList.toggle('room',room);resize();}
+let cur=0,next=0,evolve=true,phase='form',morph=1.25,exposure=0,lastPresence=-1e9,idleSince=performance.now();
+const ui={name:document.getElementById('name'),sub:document.getElementById('sub'),state:document.getElementById('state')};
+function goTo(n){if(phase==='out')return;next=n;phase='out';}
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(k>='1'&&k<='3')goTo(+k-1);
+  else if(k==='e')evolve=!evolve;
+  else if(k==='h')document.body.classList.toggle('hide');
+  else if(k==='f'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();}
+  else if(k==='c')toggleCam();
+  else if(k==='m')Sound.toggleMute();
+  else if(k==='s')takePhoto();
+  else if(k==='p')panel.classList.toggle('off');
+  else if(k==='r')setRoom(!room);
+  else if(k==='a')autoVisitors=!autoVisitors;
+  else if(k==='v'){const o=[...vidSel.options].map(x=>x.value);setVideo(o[(o.indexOf(set.video)+1)%o.length]);vidSel.value=set.video;}
+});
+
+// ---------- 手势识别（MediaPipe）：只认手，不认身体 ----------
+// 张开手掌（≥3 根手指伸直）＝触碰；握拳或手放下＝离开。最多 3 只手
+const vid=document.getElementById('cam'),camOn=false,camLevel=0;
+const HT_VER='0.10.14';
+const handTrack={on:false,lm:null,stream:null,hands:[],lastT:-1};
+async function toggleCam(){
+  if(handTrack.on){handTrack.stream.getTracks().forEach(t=>t.stop());handTrack.on=false;handTrack.hands=[];vid.style.display='none';return;}
+  try{
+    ui.state.textContent='载入手势识别…';
+    if(!handTrack.lm){
+      const vision=await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${HT_VER}/vision_bundle.mjs`);
+      const files=await vision.FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${HT_VER}/wasm`);
+      handTrack.lm=await vision.HandLandmarker.createFromOptions(files,{baseOptions:{
+        modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'GPU'},
+        runningMode:'VIDEO',numHands:3});
+    }
+    handTrack.stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:360}});
+    vid.srcObject=handTrack.stream;await vid.play();handTrack.on=true;vid.style.display='block';
+  }catch(err){console.warn('手势识别不可用',err);ui.state.textContent='手势识别不可用（需要摄像头权限和网络）';}
+}
+function readHands(now){
+  if(!handTrack.on||vid.readyState<2||vid.currentTime===handTrack.lastT)return;
+  handTrack.lastT=vid.currentTime;
+  const r=handTrack.lm.detectForVideo(vid,now);
+  const d2=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  handTrack.hands=(r.landmarks||[]).map(lm=>{
+    const w=lm[0],palm=[0,5,9,13,17].reduce((a,i)=>({x:a.x+lm[i].x/5,y:a.y+lm[i].y/5}),{x:0,y:0});
+    const ext=[[8,6],[12,10],[16,14],[20,18]].filter(([tip,pip])=>d2(lm[tip],w)>d2(lm[pip],w)*1.1).length;
+    // 镜像，并放大一点：手不用伸到摄像头画面边缘就能碰到墙边
+    return {x:Math.max(-1,Math.min(1,(0.5-palm.x)*2.5)),y:Math.max(-1,Math.min(1,(0.5-palm.y)*2.5)),open:ext>=3};
+  });
+}
+const hcur=[...document.querySelectorAll('.hcur')];
+function placeCursors(){
+  hcur.forEach((el,k)=>{
+    const d=handTrack.on?handTrack.hands[k]:null;
+    el.className='hcur'+(d?(d.open?' open':' fist'):'');if(!d)return;
+    let X=(hands[k].x+1)/2*innerWidth,Y=(1-hands[k].y)/2*innerHeight;
+    if(!d.open){X=(d.x+1)/2*innerWidth;Y=(1-d.y)/2*innerHeight;}
+    if(room){   // 展厅里：把墙上的点投到屏幕上
+      const wx=P[0]+((d.open?hands[k].x:d.x)+1)/2*(P[2]-P[0]),wy=P[1]+((d.open?hands[k].y:d.y)+1)/2*(P[3]-P[1]);
+      const ro=roomCam.ro,fw=norm(sub(roomCam.ta,ro)),rt=norm(cross(fw,[0,1,0])),up=cross(rt,fw),v=[wx-ro[0],wy-ro[1],-ro[2]];
+      const z=v[0]*fw[0]+v[1]*fw[1]+v[2]*fw[2];
+      const sx=(v[0]*rt[0]+v[1]*rt[1]+v[2]*rt[2])*ROOM.F/z/1.6,sy=(v[0]*up[0]+v[1]*up[1]+v[2]*up[2])*ROOM.F/z/(1.6*innerHeight/innerWidth);
+      X=(sx+1)/2*innerWidth;Y=(1-sy)/2*innerHeight;
+    }
+    el.style.left=X+'px';el.style.top=Y+'px';
+  });
+}
+
+// ---------- 配乐：浏览器实时合成，跟着交互变化 ----------
+// 每种生物一个和弦的缓慢环境音 + 低沉水声；触碰溶解时响起玻璃般的音粒；进化时一声低涌、换和弦
+const Sound=(()=>{
+  const CHORDS=[[73.42,146.83,220.0,261.63,349.23,440.0],     // 章鱼：D 小调九和弦
+                [87.31,174.61,261.63,329.63,392.0,493.88],    // 水母：F 大七加升十一
+                [55.0,110.0,164.81,246.94,329.63,392.0]];      // 鳐：A 小调
+  let ctx,master,padBus,padFilter,rev,voices=[],chord=0,pingAcc=0,started=false,muted=false;
+  function impulse(sec){const n=ctx.sampleRate*sec,b=ctx.createBuffer(2,n,ctx.sampleRate);
+    for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2.6);}return b;}
+  function noiseBuf(sec){const n=ctx.sampleRate*sec,b=ctx.createBuffer(1,n,ctx.sampleRate),d=b.getChannelData(0);let l=0;
+    for(let i=0;i<n;i++){l=(l+0.02*(Math.random()*2-1))/1.02;d[i]=l*3.5;}return b;}   // 褐噪声：低沉的水流
+  function start(){
+    if(started)return;started=true;
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    master=ctx.createGain();master.gain.value=0;master.connect(ctx.destination);
+    master.gain.setTargetAtTime(set.vol,ctx.currentTime,1.5);
+    rev=ctx.createConvolver();rev.buffer=impulse(6);const revOut=ctx.createGain();revOut.gain.value=0.9;rev.connect(revOut).connect(master);
+    padFilter=ctx.createBiquadFilter();padFilter.type='lowpass';padFilter.frequency.value=700;padFilter.Q.value=0.6;
+    padBus=ctx.createGain();padBus.gain.value=0.16;padBus.connect(padFilter);padFilter.connect(master);padFilter.connect(rev);
+    const lfo=ctx.createOscillator(),lfoG=ctx.createGain();lfo.frequency.value=0.045;lfoG.gain.value=260;lfo.connect(lfoG).connect(padFilter.frequency);lfo.start();
+    CHORDS[0].forEach((f,i)=>{                      // 每个音两只略微走音的振荡器，再加一个慢慢起伏的音量
+      const g=ctx.createGain();g.gain.value=i===0?0.5:0.22;g.connect(padBus);
+      const am=ctx.createOscillator(),amG=ctx.createGain();am.frequency.value=0.03+i*0.017;amG.gain.value=0.12;am.connect(amG).connect(g.gain);am.start();
+      const os=[-5,5].map((det,j)=>{const o=ctx.createOscillator();o.type=j?'triangle':'sine';o.frequency.value=f;o.detune.value=det;o.connect(g);o.start();return o;});
+      voices.push(os);
+    });
+    const nz=ctx.createBufferSource();nz.buffer=noiseBuf(6);nz.loop=true;
+    const bp=ctx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=280;bp.Q.value=0.5;
+    const nzG=ctx.createGain();nzG.gain.value=0.05;nz.connect(bp).connect(nzG);nzG.connect(master);nzG.connect(rev);nz.start();
+    const l2=ctx.createOscillator(),l2G=ctx.createGain();l2.frequency.value=0.07;l2G.gain.value=120;l2.connect(l2G).connect(bp.frequency);l2.start();
+    setChord(chord,0.1);
+  }
+  function setChord(i,tc=2.5){chord=i;if(!ctx)return;
+    voices.forEach((os,k)=>os.forEach(o=>o.frequency.setTargetAtTime(CHORDS[i][k],ctx.currentTime,tc)));}
+  function ping(pan,bright){                       // 玻璃般的音粒：正弦 + 一个不和谐的泛音，像钟
+    const t=ctx.currentTime,f=CHORDS[chord][1+((Math.random()*5)|0)]*(Math.random()<0.5?4:8);
+    const g=ctx.createGain(),p=ctx.createStereoPanner();p.pan.value=Math.max(-1,Math.min(1,pan));
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.05*bright,t+0.006);g.gain.exponentialRampToValueAtTime(0.0001,t+2.2+Math.random()*1.5);
+    [[1,1],[2.76,0.25]].forEach(([m,a])=>{const o=ctx.createOscillator(),og=ctx.createGain();o.frequency.value=f*m;og.gain.value=a;o.connect(og).connect(g);o.start(t);o.stop(t+4);});
+    g.connect(p);p.connect(rev);p.connect(master);
+  }
+  function swell(){                                // 进化：一声低沉的涌动 + 水声扫过
+    const t=ctx.currentTime;
+    const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.setValueAtTime(62,t);o.frequency.exponentialRampToValueAtTime(38,t+4);
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.35,t+0.8);g.gain.exponentialRampToValueAtTime(0.0001,t+5);
+    o.connect(g);g.connect(master);g.connect(rev);o.start(t);o.stop(t+5.2);
+    const n=ctx.createBufferSource();n.buffer=noiseBuf(4);const f=ctx.createBiquadFilter();f.type='lowpass';f.Q.value=4;
+    f.frequency.setValueAtTime(150,t);f.frequency.exponentialRampToValueAtTime(2400,t+1.6);f.frequency.exponentialRampToValueAtTime(120,t+4);
+    const ng=ctx.createGain();ng.gain.setValueAtTime(0,t);ng.gain.linearRampToValueAtTime(0.18,t+1.2);ng.gain.linearRampToValueAtTime(0,t+4);
+    n.connect(f).connect(ng);ng.connect(rev);ng.connect(master);n.start(t);n.stop(t+4.2);
+  }
+  function update(dt,activity,pan,dissolve){
+    if(!ctx)return;
+    master.gain.setTargetAtTime(muted?0:set.vol,ctx.currentTime,0.3);
+    padFilter.frequency.setTargetAtTime(500+1400*dissolve,ctx.currentTime,0.8);   // 溶解时声音变亮
+    pingAcc+=dt*activity*5;
+    while(pingAcc>1){pingAcc-=1+Math.random()*0.6;ping(pan+(Math.random()-0.5)*0.4,0.6+Math.random()*0.6);}
+  }
+  function shutter(){if(!ctx)return;const t=ctx.currentTime;
+    [0,0.07].forEach((dt,i)=>{const n=ctx.createBufferSource();n.buffer=noiseBuf(0.15);const f=ctx.createBiquadFilter();f.type='highpass';f.frequency.value=1800+i*900;
+      const g=ctx.createGain();g.gain.setValueAtTime(0.0001,t+dt);g.gain.linearRampToValueAtTime(0.25,t+dt+0.003);g.gain.exponentialRampToValueAtTime(0.0001,t+dt+0.06);
+      n.connect(f).connect(g).connect(master);n.start(t+dt);n.stop(t+dt+0.12);});}
+  return {start,setChord,swell,update,shutter,toggleMute(){if(started)muted=!muted;},get started(){return started;},get muted(){return muted;}};
+})();
+['pointerdown','keydown'].forEach(ev=>addEventListener(ev,()=>{if(!Sound.started){Sound.start();Sound.setChord(cur,0.1);}}));
+
+// ---------- 主循环 ----------
+let homes=[],t0=performance.now(),last=t0,frame=0,prevPhase='form',prevCur=0;
+function frameStep(now){
+  const dt=Math.min(0.05,(now-last)/1000);last=now;const t=(now-t0)/1000;frame++;
+  readHands(now);
+  updateVideoTex();
+
+  // 手：最近 1.2 秒内有移动才算"在场"
+  if(room)updateVisitors(dt,now,t);
+  else{const h=hands[0];h.on=mouse.on;h.last=mouse.last;h.x=mouse.px/innerWidth*2-1;h.y=1-mouse.py/innerHeight*2;hands[1].on=hands[2].on=false;}
+  if(handTrack.on)hands.forEach((h,k)=>{     // 开了手势识别：三只手全部来自摄像头
+    const d=handTrack.hands[k];
+    if(d&&d.open){if(!h.on){h.x=h.lx=d.x;h.y=h.ly=d.y;}h.x+=(d.x-h.x)*0.5;h.y+=(d.y-h.y)*0.5;h.on=true;h.last=now;}
+    else h.on=false;
+  });
+  placeCursors();
+  const hPos=new Float32Array(6),hVel=new Float32Array(6),hOn=new Float32Array(3),hAmt=new Float32Array(3);
+  let handActive=false;
+  hands.forEach((h,k)=>{
+    h.vx=h.vx*0.6+(h.x-h.lx)*0.4;h.vy=h.vy*0.6+(h.y-h.ly)*0.4;h.lx=h.x;h.ly=h.y;
+    if(!h.on)h.vx=h.vy=0;
+    const act=h.on&&now-h.last<1200;handActive=handActive||act;
+    hPos[k*2]=h.x;hPos[k*2+1]=h.y;hVel[k*2]=h.vx;hVel[k*2+1]=h.vy;hOn[k]=h.on?1:0;
+    hAmt[k]=act?Math.min(1,0.25+Math.hypot(h.vx,h.vy)*25):0;
+  });
+  const presence=handActive;
+  if(presence){lastPresence=now;exposure+=dt;idleSince=now;}
+
+  // 溶解 → 离开 → 凝聚（进化成下一种，或回到原形）
+  if(phase==='form'){
+    morph=Math.max(0,morph-dt*0.2);
+    if(!presence&&now-lastPresence>900&&exposure>2.5){exposure=0;next=evolve?(cur+1)%3:cur;phase='out';}
+    if(now-idleSince>50000){idleSince=now;next=(cur+1)%3;phase='out';}
+    if(!presence&&now-lastPresence>6000)exposure=Math.max(0,exposure-dt*0.5);
+  }else{
+    morph=Math.min(1.25,morph+dt*0.9);
+    if(morph>=1.25){cur=next;phase='form';ui.name.textContent=CREATURES[cur].name;ui.sub.textContent=CREATURES[cur].sub;}
+  }
+  if(phase!==prevPhase){if(phase==='out')Sound.started&&Sound.swell();prevPhase=phase;}
+  if(cur!==prevCur){Sound.setChord(cur);prevCur=cur;}
+  let act=0,pan=0;hands.forEach((h,k)=>{if(hAmt[k]>0){act+=hAmt[k];pan+=h.x*hAmt[k];}});
+  Sound.update(dt,act,act>0?pan/act:0,Math.max(presence?0.7:0,phase==='out'?1:morph*0.6));
+  ui.state.textContent=!Sound.started?'点击任意处开启声音':phase==='out'?'溶解':presence?'被触碰 · 溶解':morph>0.05?'凝聚':'';
+
+  const [sx,sy]=scale(),aspect=W/H,yaw=0.13*Math.sin(t*0.09);
+
+  // 1. 溶解场
+  gl.disable(gl.BLEND);gl.bindVertexArray(emptyVao);
+  gl.useProgram(fieldP.p);gl.bindFramebuffer(gl.FRAMEBUFFER,fieldF[1-fping]);gl.viewport(0,0,FW,FH);
+  bindTex(fieldP,'uPrev',0,fieldT[fping]);bindTex(fieldP,'uCam',1,camTex);
+  gl.uniform2fv(fieldP.u['uHands[0]'],hPos);gl.uniform1fv(fieldP.u['uHandAmts[0]'],hAmt);gl.uniform2f(fieldP.u.uTexel,1/FW,1/FH);
+  gl.uniform1f(fieldP.u.uPresence,presence?1:0);gl.uniform1f(fieldP.u.uCamOn,camOn?1:0);
+  gl.uniform1f(fieldP.u.uAspect,aspect);gl.uniform1f(fieldP.u.uT,t);
+  gl.drawArrays(gl.TRIANGLES,0,3);fping=1-fping;
+
+  // 2. 粒子模拟
+  gl.useProgram(simP.p);gl.bindFramebuffer(gl.FRAMEBUFFER,simF[1-ping]);gl.viewport(0,0,SIDE,SIDE);
+  bindTex(simP,'uPos',0,posT[ping]);bindTex(simP,'uVel',1,velT[ping]);bindTex(simP,'uSeed',2,seedTex);
+  bindTex(simP,'uHome',3,homes[cur].home);bindTex(simP,'uField',4,fieldT[fping]);bindTex(simP,'uCam',5,camTex);bindTex(simP,'uLineHome',6,homes[cur].line);bindTex(simP,'uPageHome',7,pageCustom||homes[cur].page);
+  gl.uniform1f(simP.u.uBgFlow,set.bgflow);gl.uniform1f(simP.u.uEnvC,set.envc);bindTex(simP,'uVideo',8,vidTex);
+  gl.uniform1f(simP.u.uT,t);gl.uniform1f(simP.u.uMorph,morph);gl.uniform1f(simP.u.uCamOn,camOn?1:0);
+  gl.uniform1f(simP.u.uCreature,cur);gl.uniform1f(simP.u.uAspect,aspect);
+  gl.uniform2fv(simP.u['uHands[0]'],hPos);gl.uniform2fv(simP.u['uHandVels[0]'],hVel);gl.uniform1fv(simP.u['uHandOns[0]'],hOn);
+  gl.uniform2f(simP.u.uScale,sx,sy);gl.uniform1f(simP.u.uYaw,yaw);
+  gl.drawArrays(gl.TRIANGLES,0,3);ping=1-ping;
+
+  // 3. 画进 HDR：上一帧先淡出留一点拖影，再叠加粒子
+  gl.bindFramebuffer(gl.FRAMEBUFFER,hdrF);gl.viewport(0,0,RW,RH);
+  gl.enable(gl.BLEND);gl.blendFunc(gl.ZERO,gl.SRC_ALPHA);
+  gl.useProgram(fadeP.p);gl.uniform1f(fadeP.u.uK,0.3);gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.blendFunc(gl.ONE,gl.ONE);
+  if(set.core>0.001){
+    gl.useProgram(coreP.p);gl.bindVertexArray(coreVao);
+    bindTex(coreP,'uField',0,fieldT[fping]);bindTex(coreP,'uImg',1,homes[cur].img);
+    gl.uniform1f(coreP.u.uT,t);gl.uniform1f(coreP.u.uCreature,cur);gl.uniform1f(coreP.u.uMorph,morph);
+    gl.uniform3f(coreP.u.uCoreC,...CORE_C[cur]);gl.uniform1f(coreP.u.uGain,set.core);
+    gl.uniform2f(coreP.u.uScale,sx,sy);gl.uniform1f(coreP.u.uYaw,yaw);
+    gl.drawElements(gl.TRIANGLES,CORE_COUNT,gl.UNSIGNED_SHORT,0);
+    gl.bindVertexArray(emptyVao);
+  }
+  gl.useProgram(drawP.p);
+  bindTex(drawP,'uPos',0,posT[ping]);bindTex(drawP,'uSeed',1,seedTex);bindTex(drawP,'uCol',2,homes[cur].col);
+  gl.uniform1i(drawP.u.uSide,SIDE);gl.uniform1f(drawP.u.uDpr,RW/W);gl.uniform1f(drawP.u.uSize,0.95*set.size);
+  gl.uniform1f(drawP.u.uBody,set.body);gl.uniform1f(drawP.u.uDust,set.dust);gl.uniform1f(drawP.u.uLine,set.line);gl.uniform1f(drawP.u.uPage,set.page);
+  gl.uniform1f(drawP.u.uEnv,set.env*(vidReady?1:0));gl.uniform1f(drawP.u.uEnvCol,set.envcol);
+  bindTex(drawP,'uVel',3,velT[ping]);bindTex(drawP,'uVideo',4,vidTex);
+  gl.uniform1f(drawP.u.uEnergy,0.1*Math.pow(1024/SIDE,2));
+  gl.uniform2f(drawP.u.uScale,sx,sy);gl.uniform1f(drawP.u.uYaw,yaw);
+  gl.drawArrays(gl.POINTS,0,N);
+  gl.disable(gl.BLEND);
+
+  // 4. 泛光
+  gl.useProgram(brightP.p);gl.bindFramebuffer(gl.FRAMEBUFFER,bF.b1);gl.viewport(0,0,bF.w4,bF.h4);
+  bindTex(brightP,'uSrc',0,hdrT);gl.uniform2f(brightP.u.uTexel,1/RW,1/RH);gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.useProgram(blurP.p);
+  const blur=(src,dst,w,h,dx,dy)=>{gl.bindFramebuffer(gl.FRAMEBUFFER,dst);gl.viewport(0,0,w,h);bindTex(blurP,'uSrc',0,src);gl.uniform2f(blurP.u.uDir,dx/w,dy/h);gl.drawArrays(gl.TRIANGLES,0,3);};
+  blur(b1,bF.b2,bF.w4,bF.h4,1,0);blur(b2,bF.b1,bF.w4,bF.h4,0,1);
+  blur(b1,bF.b3,bF.w8,bF.h8,1,0);blur(b3,bF.b4,bF.w8,bF.h8,0,1);
+  blur(b4,bF.b3,bF.w8,bF.h8,1.5,0);blur(b3,bF.b4,bF.w8,bF.h8,0,1.5);
+
+  // 5. 合成到屏幕
+  gl.useProgram(compP.p);gl.bindFramebuffer(gl.FRAMEBUFFER,room?wallF:null);gl.viewport(0,0,RW,RH);
+  bindTex(compP,'uHdr',0,hdrT);bindTex(compP,'uB1',1,b1);bindTex(compP,'uB2',2,b4);
+  gl.uniform1f(compP.u.uExp,set.exp);gl.uniform1f(compP.u.uBloom,set.bloom);gl.uniform1f(compP.u.uT,t%100);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+
+  // 6. 展厅
+  if(room){
+    gl.bindTexture(gl.TEXTURE_2D,wallT);gl.generateMipmap(gl.TEXTURE_2D);
+    gl.useProgram(roomP.p);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);
+    bindTex(roomP,'uWall',0,wallT);gl.uniform2f(roomP.u.uRes,cv.width,cv.height);gl.uniform1f(roomP.u.uRoomExp,set.room);gl.uniform1f(roomP.u.uT,t);
+    roomCam.ro=[ROOM.ro[0]+0.02*Math.sin(t*0.13),ROOM.ro[1]+0.01*Math.sin(t*0.19),ROOM.ro[2]];   // 手持般的极轻微晃动
+    gl.uniform3f(roomP.u.uRo,...roomCam.ro);gl.uniform3f(roomP.u.uTa,...roomCam.ta);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  }
+}
+// ---------- 拍照：截下当前画面，加落款，预览后保存 ----------
+let photoWanted=false,photoTimer=0,photoUrl=null;
+const photoBox=document.getElementById('photo'),photoImg=document.getElementById('photoImg'),photoSave=document.getElementById('photoSave');
+function takePhoto(){photoWanted=true;}
+document.getElementById('shot').addEventListener('click',e=>{e.stopPropagation();takePhoto();});
+document.getElementById('photoClose').addEventListener('click',()=>photoBox.classList.remove('on'));
+['shot','photo'].forEach(id=>document.getElementById(id).addEventListener('pointermove',e=>{e.stopPropagation();mouse.on=false;}));
+function capturePhoto(){        // 必须在画完这一帧的同一时刻读画布
+  const w=cv.width,h=cv.height,c=document.createElement('canvas');c.width=w;c.height=h;
+  const x=c.getContext('2d');x.drawImage(cv,0,0);
+  const k=h/900,pad=Math.round(36*k),d=new Date(),two=n=>String(n).padStart(2,'0');
+  const date=`${d.getFullYear()}.${two(d.getMonth()+1)}.${two(d.getDate())}`;
+  const grad=x.createLinearGradient(0,h-200*k,0,h);grad.addColorStop(0,'rgba(0,0,0,0)');grad.addColorStop(1,'rgba(0,0,0,.55)');
+  x.fillStyle=grad;x.fillRect(0,h-200*k,w,200*k);
+  x.textBaseline='alphabetic';x.fillStyle='rgba(255,255,255,.92)';
+  x.font=`300 ${Math.round(30*k)}px -apple-system,"PingFang SC",sans-serif`;
+  x.fillText(`海错粒子生命 · ${CREATURES[cur].name}`,pad,h-pad-34*k);
+  x.fillStyle='rgba(217,168,92,.95)';x.font=`${Math.round(15*k)}px -apple-system,"PingFang SC",sans-serif`;
+  x.fillText(`${CREATURES[cur].sub}　${date}`,pad,h-pad);
+  x.strokeStyle='rgba(217,168,92,.6)';x.lineWidth=Math.max(1,k);x.beginPath();x.moveTo(pad,h-pad-24*k);x.lineTo(pad+60*k,h-pad-24*k);x.stroke();
+  c.toBlob(b=>{
+    if(photoUrl)URL.revokeObjectURL(photoUrl);photoUrl=URL.createObjectURL(b);
+    photoImg.src=photoUrl;photoSave.href=photoUrl;
+    photoSave.download=`海错粒子生命-${CREATURES[cur].key}-${d.getFullYear()}${two(d.getMonth()+1)}${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}.png`;
+    photoBox.classList.add('on');clearTimeout(photoTimer);photoTimer=setTimeout(()=>photoBox.classList.remove('on'),20000);
+  },'image/png');
+  const f=document.getElementById('flash');f.classList.add('on');requestAnimationFrame(()=>requestAnimationFrame(()=>f.classList.remove('on')));
+  Sound.shutter&&Sound.shutter();
+}
+function loop(now){frameStep(now);if(photoWanted){photoWanted=false;capturePhoto();}requestAnimationFrame(loop);}
+
+(async()=>{
+  ui.state.textContent='载入概念图…';
+  for(const c of CREATURES){
+    const h=await buildHome(window.REFS[c.key]);
+    h.img=imageTex(await loadImg(window.REFS[c.key]));
+    h.line=layerTex(inkCanvas(await loadImg(window.REFS['haicuo_'+c.key]),'line'),1.4,lineMap);
+    h.page=layerTex(inkCanvas(await loadImg(window.REFS['page_'+c.key]),'ink'),1.2,pageMap);
+    homes.push(h);
+  }
+  ui.state.textContent='';
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
